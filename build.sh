@@ -5,5 +5,5 @@ if [ ! -d "build" ]; then
 fi
 
 pushd build
-gcc ../src/htlp.c 
+gcc -std=c99 ../src/htlp.c 
 popd
