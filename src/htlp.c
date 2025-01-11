@@ -21,7 +21,7 @@ struct token
 #define T(kind,...) (token){.Kind=(kind), __VA_ARGS__}
 #define TNumber(x) T(token_Number, .Number = (x))
 
-global token Tokens[] = {T('$'), TNumber(5), T('+'), TNumber(8), T('+'), TNumber(7)};
+global token Tokens[] = {T('$'), TNumber(5), T('+'), TNumber(8), T('+'), TNumber(2)};
 //global token Tokens[] = {T('$'), TNumber(69)};
 
 //- Parser

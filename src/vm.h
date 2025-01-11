@@ -11,6 +11,8 @@ typedef s64 value_type;
 global value_type VMStack[Pow2(8)] = {0};
 u64 VMStackNext = 0;
 
+global value_type VMState[Pow2(8)] = {0};
+
 global u8 ByteCode[Pow2(10)] = {0};
 u64 NumBytes = 0;
 
@@ -36,21 +38,20 @@ PushDoubleByte(u8 FirstByte, u8 SecondByte)
 	PushByte(SecondByte);
 }
 
-function void
-PushU64(u64 Value)
+function value_type
+VM_ReadState(u8 Slot)
 {
-	u64 * U64 = (u64*)(ByteCode + NumBytes);
-	*U64 = Value;
- NumBytes += 8;
+	Assert(Slot < ArrayLen(VMState));
+	value_type Result = VMState[Slot];
+	return (Result);
 }
 
-function u64
-ReadU64(u64 Byte)
+function u8
+VM_WriteState(value_type Value)
 {
-	Assert(Byte < NumBytes);
-	u64 * U64 = (u64*)(ByteCode + Byte);
-	u64 Result = *U64;
-	return (Result);
+	local u8 Slot = 0;
+	Slot = (Slot + 1) % ArrayLen(VMState);
+	VMState[Slot] = Value;
 }
 
 function void
@@ -85,9 +86,8 @@ VM_StackPeek(u64 Delta)
 function void
 Emit_Constant(value_type X)
 {
-	PushByte(bi_Constant);
-	// TODO: Is this how you do this? Or should this value be stored in somekind of State, or similar?
-	PushU64(X);
+	u8 Slot = VM_WriteState(X);
+	PushDoubleByte(bi_Constant, Slot);
 }
 
 function void
@@ -117,9 +117,8 @@ VM_Disassemble(void)
 		{
 			case bi_Constant:
 			{
-				u64 U64 = ReadU64(CurrentByte);
-				CurrentByte += 8;
-				value_type Value = U64;
+				u8 Slot = ReadAdvanceCurrentByte();
+				value_type Value = VM_ReadState(Slot);
 				printf("CONSTANT (%ld)\n", Value);
 			} break;
 			
@@ -151,9 +150,8 @@ VM_Run(void)
 		{
 			case bi_Constant:
 			{
-				u64 U64 = ReadU64(CurrentByte);
-				CurrentByte += 8;
-				value_type Value = U64;
+				u8 Slot = ReadAdvanceCurrentByte();
+				value_type Value = VM_ReadState(Slot);
 				VM_StackPush(Value);
 			} break;
 			
