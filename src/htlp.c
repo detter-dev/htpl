@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "types.h"
+#include "vm.h"
 
 //- Lexer
 typedef enum token_kind token_kind;
@@ -8,159 +9,102 @@ enum token_kind
 { 
 	// ASCII Reserved
 	token_ASCII_END = 255,
+	token_Number,
 };
-global token_kind Tokens[] = {'2', '+', '8'};
+
+typedef struct token token;
+struct token
+{
+	token_kind Kind;
+	s64 Number;
+};
+#define T(kind,...) (token){.Kind=(kind), __VA_ARGS__}
+#define TNumber(x) T(token_Number, .Number = (x))
+
+global token Tokens[] = {T('$'), TNumber(5), T('+'), TNumber(8), T('+'), TNumber(7)};
+//global token Tokens[] = {T('$'), TNumber(69)};
+
 //- Parser
+u64 ParserNextToken = 0;
 
-//- VM 
-typedef enum byte_instruction_kind byte_instruction_kind; 
-typedef s64 value_type;
-
-enum byte_instruction_kind
-{
-	bi_Write,
-	bi_Return,
-	bi_Count,
-};
-
-global value_type VMState[Pow2(8)] = {0};
-global value_type VMStack[Pow2(8)] = {0};
-u64 VMStackNext = 0;
-
-global u8 ByteCode[Pow2(10)] = {0};
-u64 NumBytes = 0;
+function void Parse_Expression();
 
 function void
-PushByte(u8 Byte)
+TokenEat(void)
 {
-	Assert(NumBytes + 1 < ArrayLen(ByteCode));
-	ByteCode[NumBytes++] = Byte;
+	ParserNextToken++;
 }
 
-function void
-PushDoubleByte(u8 FirstByte, u8 SecondByte)
+function token_kind 
+TokenPeekKind(void)
 {
-	PushByte(FirstByte);
-	PushByte(SecondByte);
+	token_kind Result = Tokens[ParserNextToken].Kind;
+	return (Result);
 }
 
-function u8
-ReadByte(u64 Byte)
+function token 
+TokenGet(void)
 {
-	u8 Result = ByteCode[Byte];
+	token Result = Tokens[ParserNextToken];
 	return (Result);
 }
 
 function void
-VM_StackPush(value_type X)
+Parse_Number(token Token)
 {
-	Assert(VMStackNext + 1 < ArrayLen(VMStack));
-	VMStack[VMStackNext++] = X;
-}
-
-function value_type
-VM_StackPop(void)
-{
-	Assert(VMStackNext);
-	value_type Result = VMStack[--VMStackNext];
-	return (Result);
-}
-
-function value_type
-VM_StateRead(u8 Slot)
-{
-	Assert(Slot < ArrayLen(VMState));
-	value_type Result = VMState[Slot];
-	return (Result);
+	Emit_Constant(Token.Number);
 }
 
 function void
-VM_StateWrite(u8 Slot, value_type X)
+Parse_OpAdd(void)
 {
-	Assert(Slot < ArrayLen(VMState));
-	VMState[Slot] = X;
+	TokenEat(); // TODO: TokenMatchEat
+	Parse_Expression();
+	Emit_OpAdd();
 }
 
-#define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 function void
-VM_Disassemble(void)
+Parse_Expression()
 {
-	u64 CurrentByte = 0;
-	while(CurrentByte < NumBytes)
+	token Left = TokenGet();
+	TokenEat();
+	
+	if(Left.Kind == token_Number)
 	{
-		u8 ByteValue = ReadAdvanceCurrentByte();
-		printf("[%ld]", CurrentByte - 1); 
+		Parse_Number(Left);
+	}
+	
+	if(TokenPeekKind() == '+')
+	{
+		Parse_OpAdd();
+	}
+}
+
+function void
+Parse_Print()
+{
+	Parse_Expression();
+	Emit_Print();
+}
+
+function void
+Parse(void)
+{
+	while(ParserNextToken < ArrayLen(Tokens))
+	{
+		token_kind Token = TokenPeekKind();
+		TokenEat();
 		
-		switch(ByteValue)
+		if(Token == '$')
 		{
-			case bi_Write:
-			{
-				u8 Slot  = ReadAdvanceCurrentByte();
-				u8 Value = ReadAdvanceCurrentByte();
-				printf(" WRITE {%d} <- %d \n", Slot, Value);
-			} break;
-			
-			case bi_Return:
-			{
-				u8 Value = ReadAdvanceCurrentByte();
-				if(!Value) puts(" RET"); 
-				else printf(" RET {%d} : %ld \n", Value, VMState[Value]);
-			} break;
-			
-			default: {puts("INVALID BYTE INSTRUCTION");} break;
-		}
-	}
-}
-
-function void
-VM_Run(void)
-{
-	u64 CurrentByte = 0;
-	while(CurrentByte < NumBytes)
-	{
-		u8 ByteValue = ReadAdvanceCurrentByte();
-		switch(ByteValue)
-		{
-			case bi_Write:
-			{
-				u8 Slot  = ReadAdvanceCurrentByte();
-				u8 Value = ReadAdvanceCurrentByte();
-				VM_StateWrite(Slot, Value);
-			} break;
-			
-			case bi_Return:
-			{
-				u8 Slot = ReadAdvanceCurrentByte();
-				value_type X = VM_StateRead(Slot);
-				VM_StackPush(X);
-			} break;
-			
-			default: {} break;
-		}
-	}
-}
-
-function void
-VM_PrintState()
-{
-	for(u64 i = 0; i < ArrayLen(VMState); i++)
-	{
-		value_type Value = VM_StateRead(i);
-		if(Value)
-		{
-			printf("{%ld} : %ld\n", i, Value);
+			Parse_Print();
 		}
 	}
 }
 
 void main()
 {
-	PushDoubleByte(bi_Return, 69);
-	
-	PushByte(bi_Write);
-	PushDoubleByte(69, 155);
-	
+	Parse();
 	VM_Disassemble();
 	VM_Run();
-	VM_PrintState();
 }

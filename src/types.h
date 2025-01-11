@@ -14,6 +14,7 @@ typedef s8  b8;
 typedef s32 b32;
 
 #define global   static
+#define local    static
 #define function static
 
 // TODO: Add #if DEBUG for Assert

@@ -4,6 +4,4 @@ if [ ! -d "build" ]; then
     mkdir build
 fi
 
-pushd build
-gcc -std=c99 ../src/htlp.c 
-popd
+gcc -std=c99 -Og -g -o build/htpl src/htlp.c  
