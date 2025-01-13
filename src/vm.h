@@ -2,7 +2,10 @@ typedef enum byte_instruction_kind byte_instruction_kind;
 enum byte_instruction_kind
 {
 	bi_Constant,
+	
 	bi_Add,
+	bi_Mul,
+	
 	bi_Print,
 	bi_Count,
 };
@@ -97,6 +100,12 @@ Emit_OpAdd(void)
 }
 
 function void
+Emit_OpMul(void)
+{
+	PushByte(bi_Mul);
+}
+
+function void
 Emit_Print(void)
 {
 	PushByte(bi_Print);
@@ -122,6 +131,11 @@ VM_Disassemble(void)
 				printf("CONSTANT (%ld)\n", Value);
 			} break;
 			
+			case bi_Mul:
+			{
+				puts("MUL");
+			} break;
+			
 			case bi_Add:
 			{
 				puts("ADD");
@@ -129,11 +143,10 @@ VM_Disassemble(void)
 			
 			case bi_Print:
 			{
-				ReadAdvanceCurrentByte();
 				puts("PRINT");
 			} break;
 			
-			default: {puts("UNKNOWN BYTE INSTRUCTION");} break;
+			default: {printf("UNKNOWN BYTE INSTRUCTION: %d \n", ByteValue);} break;
 		}
 	}
 }
@@ -153,6 +166,13 @@ VM_Run(void)
 				u8 Slot = ReadAdvanceCurrentByte();
 				value_type Value = VM_ReadState(Slot);
 				VM_StackPush(Value);
+			} break;
+			
+			case bi_Mul:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				VM_StackPush(Left * Right);
 			} break;
 			
 			case bi_Add:
