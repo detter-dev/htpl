@@ -11,6 +11,11 @@ enum token_kind
 	token_ASCII_END = 255,
 	token_Number,
 	
+	// NOTE: These are not used as token themself,
+	// rather just as a way to index into TokenBP array for tokens
+	// that can have more than one way of combining (e.g. unary minus and subtraction)
+	token_UnaryMinus,
+	
 	token_Count,
 };
 
@@ -22,7 +27,13 @@ global token_bp TokenBP[token_Count] =
 	[token_Number] = 1,
 	
 	['+'] = 2,
+	['-'] = 2,
+	
 	['*'] = 3,
+	['/'] = 3,
+	
+	['!'] = 5,
+	[token_UnaryMinus] = 5,
 };
 
 typedef struct token token;
@@ -32,12 +43,13 @@ struct token
 	s64 Number;
 };
 #define T(kind,...) (token){.Kind=(kind), __VA_ARGS__}
-#define TNumber(x) T(token_Number, .Number = (x))
+#define TNum(x) T(token_Number, .Number = (x))
 
 global token Tokens[] = 
 {
 	T('$'), 
-	TNumber(3), T('*'), TNumber(5), T('+'), TNumber(2), T('*'), TNumber(4),
+	T('-'), TNum(6), T('*'), TNum(-5), T('/'), TNum(0), T('+'), TNum(13),
+	//TNum(5),
 };
 
 //- Parser
@@ -73,27 +85,105 @@ TokenGet(void)
 	return (Result);
 }
 
-function void
-Parse_Number(token Token)
+function token 
+TokenPrevious(void)
 {
-	Emit_Constant(Token.Number);
+	Assert(ParserNextToken);
+	token Result = Tokens[ParserNextToken-1];
+	return (Result);
+}
+
+function void
+TokenMatchEat(token_kind ToMatch)
+{
+	token_kind Current = TokenPeekKind();
+	if(ToMatch == Current)
+	{
+		TokenEat();
+	}
+	else
+	{
+		printf("[E] Expected token ID %d, but got %d.\n", ToMatch, Current);
+	}
+}
+
+function void
+Parse_Number(token_bp RightBP)
+{
+	token Previous = TokenPrevious();
+	Emit_Constant(Previous.Number);
 }
 
 function void
 Parse_OpAdd(token_bp RightBP)
 {
-	TokenEat(); // TODO: TokenMatchEat
+	TokenEat();
 	Parse_Expression(RightBP);
 	Emit_OpAdd();
 }
 
 function void
+Parse_OpSub(token_bp RightBP)
+{
+	TokenEat();
+	Parse_Expression(RightBP);
+	Emit_OpSub();
+}
+
+function void
 Parse_OpMul(token_bp RightBP)
 {
-	TokenEat(); // TODO: TokenMatchEat
+	TokenEat();
 	Parse_Expression(RightBP);
 	Emit_OpMul();
 }
+
+function void
+Parse_OpDiv(token_bp RightBP)
+{
+	TokenEat();
+	Parse_Expression(RightBP);
+	Emit_OpDiv();
+}
+
+function void
+Parse_Neg(token_bp RightBP)
+{
+	token_bp LeftBP = TokenGetBP(token_UnaryMinus);
+	Parse_Expression(LeftBP);
+	Emit_Neg();
+}
+
+function void
+Parse_Not(token_bp RightBP)
+{
+	token_bp LeftBP = TokenGetBP('!');
+	Parse_Expression(LeftBP);
+	Emit_Not();
+}
+
+typedef enum operator_kind operator_kind;
+enum operator_kind
+{
+	operator_Prefix,
+	operator_Infix,
+	operator_Sufix,
+	
+	operator_Count,
+};
+
+global void (*ExpressionFunction[token_Count][operator_Count]) (token_bp BP) = 
+{
+	['!'] = {Parse_Not, 0, 0},
+	
+	['+'] = {0, Parse_OpAdd, 0},
+	['*'] = {0, Parse_OpMul, 0},
+	['/'] = {0, Parse_OpDiv, 0},
+	
+	['-'] = {Parse_Neg, Parse_OpSub, 0},
+	
+	[token_Number] = {Parse_Number, 0, 0},
+};
 
 function void
 Parse_Expression(token_bp RightBP)
@@ -101,9 +191,10 @@ Parse_Expression(token_bp RightBP)
 	token Nud = TokenGet();
 	TokenEat();
 	
-	if(Nud.Kind == token_Number)
+	void (*FunctionPrefix)(token_bp BP) = ExpressionFunction[Nud.Kind][operator_Prefix];
+	if(FunctionPrefix)
 	{
-		Parse_Number(Nud);
+		FunctionPrefix(RightBP);
 	}
 	
 	token_kind NextToken = TokenPeekKind();
@@ -111,13 +202,16 @@ Parse_Expression(token_bp RightBP)
 	
 	while(LeftBP > RightBP)
 	{
-		if(NextToken == '+')
+		void (*FunctionInifx)(token_bp BP) = ExpressionFunction[NextToken][operator_Infix];
+		
+		if(FunctionInifx)
 		{
-			Parse_OpAdd(LeftBP);
+			FunctionInifx(LeftBP);
 		}
-		else if(NextToken == '*')
+		else
 		{
-			Parse_OpMul(LeftBP);
+			TokenEat();
+			printf("[E] Couldn't find Infix function for token ID %d (\"%c\").\n", NextToken, NextToken);
 		}
 		
 		NextToken = TokenPeekKind();

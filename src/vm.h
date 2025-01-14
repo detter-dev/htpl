@@ -4,10 +4,31 @@ enum byte_instruction_kind
 	bi_Constant,
 	
 	bi_Add,
+	bi_Sub,
+	
 	bi_Mul,
+	bi_Div,
+	
+	bi_Neg,
+	
+	bi_Not,
 	
 	bi_Print,
 	bi_Count,
+};
+
+global char * ByteInstructionString[bi_Count] =
+{
+	[bi_Constant] = 0,
+	
+	[bi_Add] = "ADD",
+	[bi_Sub] = "SUB",
+	[bi_Mul] = "MUL",
+	[bi_Div] = "DIV",
+	[bi_Neg] = "NEG",
+	[bi_Not] = "NOT",
+	
+	[bi_Print] = "PRINT",
 };
 
 typedef s64 value_type;
@@ -100,15 +121,39 @@ Emit_OpAdd(void)
 }
 
 function void
+Emit_OpSub(void)
+{
+	PushByte(bi_Sub);
+}
+
+function void
 Emit_OpMul(void)
 {
 	PushByte(bi_Mul);
 }
 
 function void
+Emit_OpDiv(void)
+{
+	PushByte(bi_Div);
+}
+
+function void
 Emit_Print(void)
 {
 	PushByte(bi_Print);
+}
+
+function void
+Emit_Neg(void)
+{
+	PushByte(bi_Neg);
+}
+
+function void
+Emit_Not(void)
+{
+	PushByte(bi_Not);
 }
 
 #define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
@@ -132,21 +177,17 @@ VM_Disassemble(void)
 			} break;
 			
 			case bi_Mul:
-			{
-				puts("MUL");
-			} break;
-			
+			case bi_Div:
 			case bi_Add:
-			{
-				puts("ADD");
-			} break;
-			
+			case bi_Sub:
+			case bi_Neg:
+			case bi_Not:
 			case bi_Print:
 			{
-				puts("PRINT");
+				puts(ByteInstructionString[ByteValue]);
 			} break;
 			
-			default: {printf("UNKNOWN BYTE INSTRUCTION: %d \n", ByteValue);} break;
+			default: {printf("UNKNOWN BYTE INSTRUCTION: %d \n", ByteValue); Assert(0);} break;
 		}
 	}
 }
@@ -175,6 +216,14 @@ VM_Run(void)
 				VM_StackPush(Left * Right);
 			} break;
 			
+			case bi_Div:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				value_type Result = Right ? Left / Right : 0;
+				VM_StackPush(Result);
+			} break;
+			
 			case bi_Add:
 			{
 				value_type Right = VM_StackPop();
@@ -182,11 +231,32 @@ VM_Run(void)
 				VM_StackPush(Left + Right);
 			} break;
 			
+			case bi_Sub:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				VM_StackPush(Left - Right);
+			} break;
+			
+			case bi_Neg:
+			{
+				value_type Value = VM_StackPop();
+				VM_StackPush(-Value);
+			} break;
+			
+			case bi_Not:
+			{
+				value_type Value = VM_StackPop();
+				VM_StackPush(!Value);
+			} break;
+			
 			case bi_Print:
 			{
 				value_type Value = VM_StackPop();
 				printf("print: %ld\n", Value);
 			} break;
+			
+			
 			
 			default: {} break;
 		}
