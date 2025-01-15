@@ -1,7 +1,11 @@
 typedef enum byte_instruction_kind byte_instruction_kind; 
 enum byte_instruction_kind
 {
+	bi_VarAss,
+	bi_VarRead,
+	
 	bi_Constant,
+	
 	
 	bi_Add,
 	bi_Sub,
@@ -19,8 +23,6 @@ enum byte_instruction_kind
 
 global char * ByteInstructionString[bi_Count] =
 {
-	[bi_Constant] = 0,
-	
 	[bi_Add] = "ADD",
 	[bi_Sub] = "SUB",
 	[bi_Mul] = "MUL",
@@ -36,6 +38,8 @@ global value_type VMStack[Pow2(8)] = {0};
 u64 VMStackNext = 0;
 
 global value_type VMState[Pow2(8)] = {0};
+
+global value_type VMGlobalTable[Pow2(8)] = {0};
 
 global u8 ByteCode[Pow2(10)] = {0};
 u64 NumBytes = 0;
@@ -60,6 +64,21 @@ PushDoubleByte(u8 FirstByte, u8 SecondByte)
 {
 	PushByte(FirstByte);
 	PushByte(SecondByte);
+}
+
+function void
+VM_GlobalTableWrite(u8 Slot, value_type Value)
+{
+	Assert(Slot < ArrayLen(VMGlobalTable));
+	VMGlobalTable[Slot] = Value;
+}
+
+function value_type
+VM_GlobalTableRead(u8 Slot)
+{
+	Assert(Slot < ArrayLen(VMGlobalTable));
+	value_type Result = VMGlobalTable[Slot];
+	return (Result);
 }
 
 function value_type
@@ -156,6 +175,18 @@ Emit_Not(void)
 	PushByte(bi_Not);
 }
 
+function void
+Emit_VarAss(u8 Name)
+{
+	PushDoubleByte(bi_VarAss, Name);
+}
+
+function void
+Emit_VarRead(u8 Name)
+{
+	PushDoubleByte(bi_VarRead, Name);
+}
+
 #define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 
 function void
@@ -169,6 +200,18 @@ VM_Disassemble(void)
 		
 		switch(ByteValue)
 		{
+			case bi_VarAss:
+			{
+				u8 Name = ReadAdvanceCurrentByte();
+				printf("SET {%c} \n", Name);
+			} break;
+			
+			case bi_VarRead:
+			{
+				u8 Name = ReadAdvanceCurrentByte();
+				printf("READ {%c} \n", Name);
+			} break;
+			
 			case bi_Constant:
 			{
 				u8 Slot = ReadAdvanceCurrentByte();
@@ -202,6 +245,20 @@ VM_Run(void)
 		u8 ByteValue = ReadAdvanceCurrentByte();
 		switch(ByteValue)
 		{
+			case bi_VarAss:
+			{
+				u8 Name = ReadAdvanceCurrentByte();
+				value_type Value = VM_StackPop();
+				VM_GlobalTableWrite(Name, Value);
+			} break;
+			
+			case bi_VarRead:
+			{
+				u8 Name = ReadAdvanceCurrentByte();
+				value_type Value = VM_GlobalTableRead(Name);
+				VM_StackPush(Value);
+			} break;
+			
 			case bi_Constant:
 			{
 				u8 Slot = ReadAdvanceCurrentByte();
@@ -271,5 +328,18 @@ VM_PrintStack(void)
 	{
 		value_type Value = VM_StackPeek(i);
 		printf("<%ld> : %ld\n", i, Value);
+	}
+}
+
+function void
+VM_PrintGlobalState(void)
+{
+	for(u32 i = 0; i < ArrayLen(VMGlobalTable); i++)
+	{
+		value_type Value = VMGlobalTable[i];
+		if(Value)
+		{
+			printf("{%c} : %ld\n", i, Value);
+		}
 	}
 }

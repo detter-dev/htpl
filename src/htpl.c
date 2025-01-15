@@ -10,6 +10,7 @@ enum token_kind
 	// ASCII Reserved
 	token_ASCII_END = 255,
 	token_Number,
+	token_Identifier,
 	
 	// NOTE: These are not used as token themself,
 	// rather just as a way to index into TokenBP array for tokens
@@ -24,7 +25,10 @@ global token_bp TokenBP[token_Count] =
 {
 	//['$'] = 0,
 	
-	[token_Number] = 1,
+	[token_Number] = 0,
+	[token_Identifier] = 0,
+	
+	['='] = 1,
 	
 	['+'] = 2,
 	['-'] = 2,
@@ -41,14 +45,22 @@ struct token
 {
 	token_kind Kind;
 	s64 Number;
+	//u8 Name;
 };
 #define T(kind,...) (token){.Kind=(kind), __VA_ARGS__}
 #define TNum(x) T(token_Number, .Number = (x))
+#define TVar(name) T(token_Identifier, .Number = (name))
 
 global token Tokens[] = 
 {
-	T('$'), 
-	T('-'), TNum(6), T('*'), TNum(-5), T('/'), TNum(0), T('+'), TNum(13),
+	TVar('a'), T('='), TNum(1886), T('+'), TNum(1),
+	TVar('b'), T('='), TNum(4), T('*'), TNum(2), T('-'), TNum(3),
+	
+	T('$'), TVar('a'),
+	T('$'), TVar('b'),
+	
+	//T('$'), 
+	//('-'), TNum(6), T('*'), TNum(-5), T('/'), TNum(0), T('+'), TNum(13),
 	//TNum(5),
 };
 
@@ -162,6 +174,13 @@ Parse_Not(token_bp RightBP)
 	Emit_Not();
 }
 
+function void
+Parse_Identifier(token_bp RightBP)
+{
+	token Previous = TokenPrevious();
+	Emit_VarRead(Previous.Number);
+}
+
 typedef enum operator_kind operator_kind;
 enum operator_kind
 {
@@ -183,6 +202,8 @@ global void (*ExpressionFunction[token_Count][operator_Count]) (token_bp BP) =
 	['-'] = {Parse_Neg, Parse_OpSub, 0},
 	
 	[token_Number] = {Parse_Number, 0, 0},
+	
+	[token_Identifier] = {Parse_Identifier, 0, 0},
 };
 
 function void
@@ -217,6 +238,12 @@ Parse_Expression(token_bp RightBP)
 		NextToken = TokenPeekKind();
 		LeftBP = TokenGetBP(NextToken);
 	}
+	
+	void (*FunctionSufix)(token_bp BP) = ExpressionFunction[NextToken][operator_Sufix];
+	if(FunctionSufix)
+	{
+		FunctionSufix(LeftBP);
+	}
 }
 
 function void
@@ -224,6 +251,18 @@ Parse_Print(void)
 {
 	Parse_Expression(0);
 	Emit_Print();
+}
+
+function void
+Parse_VarAss(void)
+{
+	token VarToken = TokenPrevious();
+	TokenMatchEat('=');
+	
+	token_bp BP = TokenGetBP('=');
+	Parse_Expression(BP);
+	
+	Emit_VarAss(VarToken.Number); 
 }
 
 function void
@@ -238,6 +277,14 @@ Parse(void)
 		{
 			Parse_Print();
 		}
+		else if(Token == token_Identifier)
+		{
+			if(TokenPeekKind() == '=')
+			{
+				Parse_VarAss();
+			}
+			
+		}
 	}
 }
 
@@ -246,4 +293,5 @@ void main()
 	Parse();
 	VM_Disassemble();
 	VM_Run();
+	VM_PrintGlobalState();
 }
