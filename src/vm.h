@@ -4,8 +4,12 @@ enum byte_instruction_kind
 	bi_VarAss,
 	bi_VarRead,
 	
-	bi_Constant,
+	bi_CmpGreater,
+	bi_CmpLess,
+	//bi_CmpLessOrEqual    = !bi_CmpGreater
+	//bi_CmpGreaterOrEqual = !bi_CmpLess
 	
+	bi_Constant,
 	
 	bi_Add,
 	bi_Sub,
@@ -29,6 +33,9 @@ global char * ByteInstructionString[bi_Count] =
 	[bi_Div] = "DIV",
 	[bi_Neg] = "NEG",
 	[bi_Not] = "NOT",
+	
+	[bi_CmpGreater] = "CMPG",
+	[bi_CmpLess]    = "CMPL",
 	
 	[bi_Print] = "PRINT",
 };
@@ -187,6 +194,31 @@ Emit_VarRead(u8 Name)
 	PushDoubleByte(bi_VarRead, Name);
 }
 
+function void
+Emit_CmpGreater(void)
+{
+	PushByte(bi_CmpGreater);
+}
+
+function void
+Emit_CmpLess(void)
+{
+	PushByte(bi_CmpLess);
+}
+
+function void
+Emit_CmpLessEqual(void)
+{
+	Emit_Not();
+	Emit_CmpGreater();
+}
+
+function void
+Emit_CmpGreaterEqual(void)
+{
+	Emit_Not();
+	Emit_CmpLess();
+}
 #define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 
 function void
@@ -226,6 +258,8 @@ VM_Disassemble(void)
 			case bi_Neg:
 			case bi_Not:
 			case bi_Print:
+			case bi_CmpLess:
+			case bi_CmpGreater:
 			{
 				puts(ByteInstructionString[ByteValue]);
 			} break;
@@ -252,6 +286,22 @@ VM_Run(void)
 				VM_GlobalTableWrite(Name, Value);
 			} break;
 			
+			case bi_CmpLess:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				value_type Result = Left < Right;
+				VM_StackPush(Result);
+			} break;
+			
+			case bi_CmpGreater:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				value_type Result = Left > Right;
+				VM_StackPush(Result);
+			} break;
+			
 			case bi_VarRead:
 			{
 				u8 Name = ReadAdvanceCurrentByte();
@@ -270,7 +320,8 @@ VM_Run(void)
 			{
 				value_type Right = VM_StackPop();
 				value_type Left  = VM_StackPop();
-				VM_StackPush(Left * Right);
+				value_type Result = Left * Right;
+				VM_StackPush(Result);
 			} break;
 			
 			case bi_Div:
@@ -285,14 +336,16 @@ VM_Run(void)
 			{
 				value_type Right = VM_StackPop();
 				value_type Left  = VM_StackPop();
-				VM_StackPush(Left + Right);
+				value_type Result = Left + Right;
+				VM_StackPush(Result);
 			} break;
 			
 			case bi_Sub:
 			{
 				value_type Right = VM_StackPop();
 				value_type Left  = VM_StackPop();
-				VM_StackPush(Left - Right);
+				value_type Result = Left - Right;
+				VM_StackPush(Result);
 			} break;
 			
 			case bi_Neg:

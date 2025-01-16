@@ -30,6 +30,9 @@ global token_bp TokenBP[token_Count] =
 	
 	['='] = 1,
 	
+	['>'] = 1,
+	['<'] = 1,
+	
 	['+'] = 2,
 	['-'] = 2,
 	
@@ -38,6 +41,7 @@ global token_bp TokenBP[token_Count] =
 	
 	['!'] = 5,
 	[token_UnaryMinus] = 5,
+	
 };
 
 typedef struct token token;
@@ -53,15 +57,19 @@ struct token
 
 global token Tokens[] = 
 {
-	TVar('a'), T('='), TNum(1886), T('+'), TNum(1),
-	TVar('b'), T('='), TNum(4), T('*'), TNum(2), T('-'), TNum(3),
+	TVar('a'), T('='), TNum(6),   T('+'), TNum(1),
+	TVar('b'), T('='), TVar('a'), T('*'), TNum(2),
 	
 	T('$'), TVar('a'),
 	T('$'), TVar('b'),
+	T('$'), TVar('a'), T('+'), TVar('b'),
 	
-	//T('$'), 
-	//('-'), TNum(6), T('*'), TNum(-5), T('/'), TNum(0), T('+'), TNum(13),
-	//TNum(5),
+	T('$'), TVar('a'), T('>'), TVar('b'),
+	T('$'), TVar('a'), T('<'), TVar('b'),
+	
+	T('$'), TVar('a'), T('+'), TVar('b'), T('>'), TVar('a'), T('-'), TVar('b'),
+	T('$'), TVar('a'), T('/'), TVar('b'), T('>'), TVar('a'), T('*'), TVar('b'),
+	T('$'), TVar('a'), T('/'), TVar('b'), T('<'), TVar('a'), T('+'), TVar('b'),
 };
 
 //- Parser
@@ -181,6 +189,22 @@ Parse_Identifier(token_bp RightBP)
 	Emit_VarRead(Previous.Number);
 }
 
+function void
+Parse_GreaterThan(token_bp RightBP)
+{
+	TokenEat();
+	Parse_Expression(RightBP);
+	Emit_CmpGreater();
+}
+
+function void
+Parse_LessThan(token_bp RightBP)
+{
+	TokenEat();
+	Parse_Expression(RightBP);
+	Emit_CmpLess();
+}
+
 typedef enum operator_kind operator_kind;
 enum operator_kind
 {
@@ -200,6 +224,9 @@ global void (*ExpressionFunction[token_Count][operator_Count]) (token_bp BP) =
 	['/'] = {0, Parse_OpDiv, 0},
 	
 	['-'] = {Parse_Neg, Parse_OpSub, 0},
+	
+	['>'] = {0, Parse_GreaterThan, 0},
+	['<'] = {0, Parse_LessThan, 0},
 	
 	[token_Number] = {Parse_Number, 0, 0},
 	
