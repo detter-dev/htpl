@@ -12,6 +12,8 @@ enum token_kind
 	token_Number,
 	token_Identifier,
 	
+	token_Equal, // ==
+	
 	// NOTE: These are not used as token themself,
 	// rather just as a way to index into TokenBP array for tokens
 	// that can have more than one way of combining (e.g. unary minus and subtraction)
@@ -32,6 +34,7 @@ global token_bp TokenBP[token_Count] =
 	
 	['>'] = 1,
 	['<'] = 1,
+	[token_Equal] = 1,
 	
 	['+'] = 2,
 	['-'] = 2,
@@ -58,18 +61,18 @@ struct token
 global token Tokens[] = 
 {
 	TVar('a'), T('='), TNum(6),   T('+'), TNum(1),
-	TVar('b'), T('='), TVar('a'), T('*'), TNum(2),
+	TVar('b'), T('='), TVar('a'), T('*'), TNum(1),
 	
-	T('$'), TVar('a'),
-	T('$'), TVar('b'),
-	T('$'), TVar('a'), T('+'), TVar('b'),
+	//T('$'), TVar('a'),
+	//T('$'), TVar('b'),
+	//T('$'), TVar('a'), T('+'), TVar('b'),
 	
-	T('$'), TVar('a'), T('>'), TVar('b'),
-	T('$'), TVar('a'), T('<'), TVar('b'),
+	T('$'), TVar('a'), T('>'), T('='), TVar('b'),
+	T('$'), TNum(7), T(token_Equal), TVar('b'),
 	
-	T('$'), TVar('a'), T('+'), TVar('b'), T('>'), TVar('a'), T('-'), TVar('b'),
-	T('$'), TVar('a'), T('/'), TVar('b'), T('>'), TVar('a'), T('*'), TVar('b'),
-	T('$'), TVar('a'), T('/'), TVar('b'), T('<'), TVar('a'), T('+'), TVar('b'),
+	//T('$'), TVar('a'), T('+'), TVar('b'), T('>'), T('='), TVar('a'), T('-'), TVar('b'),
+	//T('$'), TVar('a'), T('/'), TVar('b'), T('>'), TVar('a'), T('*'), TVar('b'),
+	//T('$'), TVar('a'), T('/'), TVar('b'), T('<'), TVar('a'), T('+'), TVar('b'),
 };
 
 //- Parser
@@ -189,20 +192,57 @@ Parse_Identifier(token_bp RightBP)
 	Emit_VarRead(Previous.Number);
 }
 
+// TODO: These are ugly
 function void
 Parse_GreaterThan(token_bp RightBP)
 {
 	TokenEat();
+	b8 HasEqual = TokenPeekKind() == '=';
+	if(HasEqual)
+	{
+		TokenEat();
+	}
+	
 	Parse_Expression(RightBP);
-	Emit_CmpGreater();
+	
+	if(HasEqual)
+	{
+		Emit_CmpGreaterEqual();
+	}
+	else
+	{
+		Emit_CmpGreater();
+	}
 }
 
 function void
 Parse_LessThan(token_bp RightBP)
 {
 	TokenEat();
+	b8 HasEqual = TokenPeekKind() == '=';
+	if(HasEqual)
+	{
+		TokenEat();
+	}
+	
 	Parse_Expression(RightBP);
-	Emit_CmpLess();
+	
+	if(HasEqual)
+	{
+		Emit_CmpLessEqual();
+	}
+	else
+	{
+		Emit_CmpLess();
+	}
+}
+
+function void
+Parse_Equal(token_bp RightBP)
+{
+	TokenEat();
+	Parse_Expression(RightBP);
+	Emit_CmpEqual();
 }
 
 typedef enum operator_kind operator_kind;
@@ -227,6 +267,7 @@ global void (*ExpressionFunction[token_Count][operator_Count]) (token_bp BP) =
 	
 	['>'] = {0, Parse_GreaterThan, 0},
 	['<'] = {0, Parse_LessThan, 0},
+	[token_Equal] = {0, Parse_Equal, 0},
 	
 	[token_Number] = {Parse_Number, 0, 0},
 	

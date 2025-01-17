@@ -4,6 +4,7 @@ enum byte_instruction_kind
 	bi_VarAss,
 	bi_VarRead,
 	
+	bi_CmpEqual,
 	bi_CmpGreater,
 	bi_CmpLess,
 	//bi_CmpLessOrEqual    = !bi_CmpGreater
@@ -34,6 +35,7 @@ global char * ByteInstructionString[bi_Count] =
 	[bi_Neg] = "NEG",
 	[bi_Not] = "NOT",
 	
+	[bi_CmpEqual]   = "CMP",
 	[bi_CmpGreater] = "CMPG",
 	[bi_CmpLess]    = "CMPL",
 	
@@ -195,6 +197,12 @@ Emit_VarRead(u8 Name)
 }
 
 function void
+Emit_CmpEqual(void)
+{
+	PushByte(bi_CmpEqual);
+}
+
+function void
 Emit_CmpGreater(void)
 {
 	PushByte(bi_CmpGreater);
@@ -209,15 +217,15 @@ Emit_CmpLess(void)
 function void
 Emit_CmpLessEqual(void)
 {
-	Emit_Not();
 	Emit_CmpGreater();
+	Emit_Not();
 }
 
 function void
 Emit_CmpGreaterEqual(void)
 {
-	Emit_Not();
 	Emit_CmpLess();
+	Emit_Not();
 }
 #define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 
@@ -260,6 +268,7 @@ VM_Disassemble(void)
 			case bi_Print:
 			case bi_CmpLess:
 			case bi_CmpGreater:
+			case bi_CmpEqual:
 			{
 				puts(ByteInstructionString[ByteValue]);
 			} break;
@@ -284,6 +293,14 @@ VM_Run(void)
 				u8 Name = ReadAdvanceCurrentByte();
 				value_type Value = VM_StackPop();
 				VM_GlobalTableWrite(Name, Value);
+			} break;
+			
+			case bi_CmpEqual:
+			{
+				value_type Right = VM_StackPop();
+				value_type Left  = VM_StackPop();
+				value_type Result = Left == Right;
+				VM_StackPush(Result);
 			} break;
 			
 			case bi_CmpLess:
