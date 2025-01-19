@@ -12,6 +12,9 @@ enum token_kind
 	token_Number,
 	token_Identifier,
 	
+	token_If,
+	token_Then,
+	
 	token_Equal, // ==
 	
 	// NOTE: These are not used as token themself,
@@ -26,6 +29,9 @@ typedef u8 token_bp;
 global token_bp TokenBP[token_Count] = 
 {
 	//['$'] = 0,
+	
+	[token_If] = 0,
+	[token_Then] = 0,
 	
 	[token_Number] = 0,
 	[token_Identifier] = 0,
@@ -52,33 +58,34 @@ struct token
 {
 	token_kind Kind;
 	s64 Number;
-	//u8 Name;
 };
+
 #define T(kind,...) (token){.Kind=(kind), __VA_ARGS__}
 #define TNum(x) T(token_Number, .Number = (x))
 #define TVar(name) T(token_Identifier, .Number = (name))
+#define TIf()  T(token_If)
+#define TThen() T(token_Then)
 
 global token Tokens[] = 
 {
+	T('{'),
 	TVar('a'), T('='), TNum(6),   T('+'), TNum(1),
-	TVar('b'), T('='), TVar('a'), T('*'), TNum(1),
+	TVar('b'), T('='), TVar('a'), T('*'), TNum(4),
 	
-	//T('$'), TVar('a'),
-	//T('$'), TVar('b'),
-	//T('$'), TVar('a'), T('+'), TVar('b'),
+	TIf(), TNum(0), TThen(), T('{'), T('$'),  TNum(69), T('}'),
+	TIf(), TNum(69), TThen(), T('{'), T('$'), TNum(666), T('}'),
+	TIf(), TVar('a'), T('>'), T('='), TVar('b'),  TThen(), T('{'), T('$'),  TNum(14), T('}'),
+	TIf(), TVar('a'), T('<'), TVar('b'),  TThen(), T('{'), T('$'),  TNum(1313), T('}'),
+	T('}'),
 	
-	T('$'), TVar('a'), T('>'), T('='), TVar('b'),
-	T('$'), TNum(7), T(token_Equal), TVar('b'),
-	
-	//T('$'), TVar('a'), T('+'), TVar('b'), T('>'), T('='), TVar('a'), T('-'), TVar('b'),
-	//T('$'), TVar('a'), T('/'), TVar('b'), T('>'), TVar('a'), T('*'), TVar('b'),
-	//T('$'), TVar('a'), T('/'), TVar('b'), T('<'), TVar('a'), T('+'), TVar('b'),
 };
 
 //- Parser
 u64 ParserNextToken = 0;
 
 function void Parse_Expression(u8 RightBindingPower);
+function void Parse(void);
+function void Parse_Block(void);
 
 function token_bp
 TokenGetBP(token_kind Token)
@@ -334,13 +341,34 @@ Parse_VarAss(void)
 }
 
 function void
-Parse(void)
+Parse_If()
 {
-	while(ParserNextToken < ArrayLen(Tokens))
+	Parse_Expression(0);
+	u64 BytesToRewrite = Emit_If();
+	
+	TokenMatchEat(token_Then);
+	TokenMatchEat('{');
+	Parse_Block();
+	
+	u64 BlockEnd = GetNumBytesPushed();
+	Assert(BlockEnd < U16Max);
+	RewriteWord(BytesToRewrite, BlockEnd);
+}
+
+function b8
+IsParseDone(void)
+{
+	b8 Result = ParserNextToken >= ArrayLen(Tokens);
+	return (Result);
+}
+
+function void
+Parse_Block(void)
+{
+	token_kind Token = TokenPeekKind();
+	TokenEat();
+	while(Token != '}' && !IsParseDone())
 	{
-		token_kind Token = TokenPeekKind();
-		TokenEat();
-		
 		if(Token == '$')
 		{
 			Parse_Print();
@@ -351,7 +379,27 @@ Parse(void)
 			{
 				Parse_VarAss();
 			}
-			
+		}
+		else if(Token == token_If)
+		{
+			Parse_If();
+		}
+		
+		Token = TokenPeekKind();
+		TokenEat();
+	}
+}
+
+function void
+Parse(void)
+{
+	while(!IsParseDone())
+	{
+		token_kind Token = TokenPeekKind();
+		TokenEat();
+		if(Token == '{')
+		{
+			Parse_Block();
 		}
 	}
 }
@@ -363,3 +411,4 @@ void main()
 	VM_Run();
 	VM_PrintGlobalState();
 }
+

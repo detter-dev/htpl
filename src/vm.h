@@ -10,6 +10,8 @@ enum byte_instruction_kind
 	//bi_CmpLessOrEqual    = !bi_CmpGreater
 	//bi_CmpGreaterOrEqual = !bi_CmpLess
 	
+	bi_If,
+	
 	bi_Constant,
 	
 	bi_Add,
@@ -39,6 +41,8 @@ global char * ByteInstructionString[bi_Count] =
 	[bi_CmpGreater] = "CMPG",
 	[bi_CmpLess]    = "CMPL",
 	
+	[bi_If] = "IF",
+	
 	[bi_Print] = "PRINT",
 };
 
@@ -53,6 +57,8 @@ global value_type VMGlobalTable[Pow2(8)] = {0};
 global u8 ByteCode[Pow2(10)] = {0};
 u64 NumBytes = 0;
 
+function void VM_PrintStack(void);
+
 function void
 PushByte(u8 Byte)
 {
@@ -60,11 +66,42 @@ PushByte(u8 Byte)
 	ByteCode[NumBytes++] = Byte;
 }
 
+function void
+PushWord(u16 Word)
+{
+	Assert(NumBytes + 2 < ArrayLen(ByteCode));
+	*((u16*)(ByteCode + NumBytes)) = Word;
+	NumBytes += 2;
+}
+
 function u8
 ReadByte(u64 Byte)
 {
 	Assert(Byte < NumBytes);
 	u8 Result = ByteCode[Byte];
+	return (Result);
+}
+
+function u64
+GetNumBytesPushed(void)
+{
+	u64 Result = NumBytes;
+	return (Result);
+}
+
+function void
+RewriteWord(u64 Offset, u16 Word)
+{
+	//printf("(RewriteWord) Offset: %ld  Word: %d \n", Offset, Word);
+	Assert(Offset < ArrayLen(ByteCode));
+	*((u16*)(ByteCode + Offset)) = Word;
+}
+
+function u16
+ReadWord(u64 Byte)
+{
+	Assert(Byte < NumBytes);
+	u16 Result = *((u16*)(ByteCode + Byte));
 	return (Result);
 }
 
@@ -116,8 +153,16 @@ VM_StackPush(value_type X)
 function value_type
 VM_StackPop(void)
 {
-	Assert(VMStackNext);
-	value_type Result = VMStack[--VMStackNext];
+	value_type Result = 0;
+	if(VMStackNext)
+	{
+		Result = VMStack[--VMStackNext];
+	}
+	else
+	{
+		//puts("[E] (VM_StackPop) Expecting something in the stack.");
+	}
+	
 	return (Result);
 }
 
@@ -227,8 +272,17 @@ Emit_CmpGreaterEqual(void)
 	Emit_CmpLess();
 	Emit_Not();
 }
-#define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 
+function u64
+Emit_If(void)
+{
+	PushByte(bi_If);
+	u64 Result = GetNumBytesPushed();
+	PushWord(U16Max);
+	return (Result);
+}
+
+#define ReadAdvanceCurrentByte() ReadByte(CurrentByte++);
 function void
 VM_Disassemble(void)
 {
@@ -242,6 +296,7 @@ VM_Disassemble(void)
 		{
 			case bi_VarAss:
 			{
+				printf("THIS: %d\n", ByteValue);
 				u8 Name = ReadAdvanceCurrentByte();
 				printf("SET {%c} \n", Name);
 			} break;
@@ -257,6 +312,13 @@ VM_Disassemble(void)
 				u8 Slot = ReadAdvanceCurrentByte();
 				value_type Value = VM_ReadState(Slot);
 				printf("CONSTANT (%ld)\n", Value);
+			} break;
+			
+			case bi_If:
+			{
+				u16 Address = ReadWord(CurrentByte);
+				CurrentByte += 2;
+				printf("IF (%d)\n", Address);
 			} break;
 			
 			case bi_Mul:
@@ -288,11 +350,33 @@ VM_Run(void)
 		u8 ByteValue = ReadAdvanceCurrentByte();
 		switch(ByteValue)
 		{
+			case bi_If:
+			{
+				u16 ContinueAt = ReadWord(CurrentByte);
+				CurrentByte += 2;
+				
+				value_type Value = VM_StackPop();
+				
+				if(!Value)
+				{
+					Assert(ContinueAt != -1);
+					CurrentByte = ContinueAt;
+				}
+				
+			} break;
+			
 			case bi_VarAss:
 			{
 				u8 Name = ReadAdvanceCurrentByte();
 				value_type Value = VM_StackPop();
 				VM_GlobalTableWrite(Name, Value);
+			} break;
+			
+			case bi_VarRead:
+			{
+				u8 Name = ReadAdvanceCurrentByte();
+				value_type Value = VM_GlobalTableRead(Name);
+				VM_StackPush(Value);
 			} break;
 			
 			case bi_CmpEqual:
@@ -317,13 +401,6 @@ VM_Run(void)
 				value_type Left  = VM_StackPop();
 				value_type Result = Left > Right;
 				VM_StackPush(Result);
-			} break;
-			
-			case bi_VarRead:
-			{
-				u8 Name = ReadAdvanceCurrentByte();
-				value_type Value = VM_GlobalTableRead(Name);
-				VM_StackPush(Value);
 			} break;
 			
 			case bi_Constant:
@@ -382,8 +459,6 @@ VM_Run(void)
 				value_type Value = VM_StackPop();
 				printf("print: %ld\n", Value);
 			} break;
-			
-			
 			
 			default: {} break;
 		}

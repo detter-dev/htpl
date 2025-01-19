@@ -17,6 +17,8 @@ typedef s32 b32;
 #define local    static
 #define function static
 
+global u16 U16Max = -1;
+
 // TODO: Add #if DEBUG for Assert
 #define Assert(x) if(!(x)) {*(u8*) 0 = 0;}
 #define ArrayLen(x) (sizeof((x))/sizeof((x)[0]))
